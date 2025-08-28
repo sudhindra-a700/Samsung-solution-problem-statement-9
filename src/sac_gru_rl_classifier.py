@@ -15,12 +15,7 @@ Key Components:
 - GRU Encoder: Sequence modeling for temporal traffic patterns
 - Replay Buffer: Stores experiences for off-policy learning
 - Environment: Traffic stream simulation for training
-
-Designed for deployment on Samsung phones with TensorFlow Lite.
-
-Author: Enhanced by Manus AI based on SAC-GRU hybrid approach
 """
-
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
