@@ -1,117 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     package="com.yoursacgru.testapp">
-
-    <!-- Internet permission for YouTube/Instagram integration -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    
-    <!-- Permission to query other apps (for YouTube/Instagram integration) -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="SAC-GRU Traffic Analyzer"
+        android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SACGRUTrafficAnalyzer"
-        tools:targetApi="31">
-        
+        android:theme="@style/Theme.SACGRUApp">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.SACGRUTrafficAnalyzer"
-            android:launchMode="singleTop"
-            android:screenOrientation="portrait">
-            
-            <!-- Main launcher intent -->
+            android:theme="@style/Theme.SACGRUApp">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            
-            <!-- Deep link support for YouTube content -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https"
-                      android:host="youtube.com"
-                      android:pathPrefix="/shorts" />
-            </intent-filter>
-            
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https"
-                      android:host="youtu.be" />
-            </intent-filter>
-            
-            <!-- Deep link support for Instagram Reels -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https"
-                      android:host="instagram.com"
-                      android:pathPrefix="/reel" />
-            </intent-filter>
-            
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https"
-                      android:host="instagram.com"
-                      android:pathPrefix="/reels" />
-            </intent-filter>
-            
-            <!-- Custom scheme for SAC-GRU app integration -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="sacgru"
-                      android:host="analyze" />
-            </intent-filter>
-            
-            <!-- Handle shared content from other apps -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            
         </activity>
-        
-        <!-- File provider for sharing analysis results -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="com.yoursacgru.testapp.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
-        
     </application>
-
-    <!-- Queries for YouTube and Instagram apps -->
-    <queries>
-        <package android:name="com.google.android.youtube" />
-        <package android:name="com.instagram.android" />
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" />
-        </intent>
-    </queries>
-
 </manifest>
-
