@@ -14,10 +14,7 @@ Key Features:
 
 Usage:
     python laptop_training_pipeline_fixed.py --train --extract-actor --deploy-android
-
-Author: Enhanced by Manus AI for SAC-GRU Traffic Analyzer
 """
-
 import os
 import sys
 import argparse
