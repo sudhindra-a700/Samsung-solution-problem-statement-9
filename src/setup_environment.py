@@ -14,10 +14,7 @@ Features:
 
 Usage:
     python setup_environment.py [--install-deps] [--validate] [--train-model]
-
-Author: Enhanced by Manus AI for SAC-GRU Traffic Analyzer
 """
-
 import os
 import sys
 import subprocess
