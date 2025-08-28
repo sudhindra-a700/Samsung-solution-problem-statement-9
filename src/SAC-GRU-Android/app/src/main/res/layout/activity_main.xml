@@ -3,58 +3,18 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
-    android:background="#f8f9fa">
+    android:padding="16dp">
 
     <TextView
-        android:layout_width="match_parent"
+        android:id="@+id/result_text"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🔥 Your SAC-GRU Traffic Classification"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:textColor="#2c3e50"
-        android:layout_marginBottom="10dp" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Based on your uploaded architecture files"
-        android:textSize="14sp"
-        android:gravity="center"
-        android:textColor="#7f8c8d"
-        android:layout_marginBottom="20dp" />
+        android:text="Loading..." />
 
     <Button
         android:id="@+id/test_button"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🧠 Run Your SAC-GRU Tests"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="20dp"
-        android:enabled="false"
-        android:backgroundTint="#3498db"
-        android:textColor="#ffffff" />
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#ffffff"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/result_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🔄 Initializing Your SAC-GRU System..."
-            android:textSize="12sp"
-            android:fontFamily="monospace"
-            android:textColor="#2c3e50"
-            android:padding="12dp"
-            android:lineSpacingExtra="2dp" />
-
-    </ScrollView>
+        android:text="Run Test" />
 
 </LinearLayout>
-
