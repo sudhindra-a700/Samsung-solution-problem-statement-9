@@ -1,40 +1,30 @@
 package com.yoursacgru.testapp
 
+import android.app.AppOpsManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.flex.FlexDelegate  // ✅ CRITICAL CHANGE 1: Added FlexDelegate import
-import java.io.FileInputStream
-import java.io.IOException
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel
-import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
-
-    private val TAG: String = "SACGRU_Final_RL"
-    private val MODEL_FILE: String = "sac_actor_model.tflite"
-    private var actorInterpreter: Interpreter? = null
-    private var flexDelegate: FlexDelegate? = null  // ✅ CRITICAL CHANGE 2: Added FlexDelegate field
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,28 +36,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Data class to hold the result of a prediction
-    data class PredictionResult(val label: String, val confidence: Float)
-    // Data class to hold the result of a simulated learning step
-    data class LearningStep(val prediction: String, val reward: Double, val feedback: String)
-
     @Composable
     fun SACGRUApp() {
-        // State variables for the UI
-        val modelLoaded = remember { mutableStateOf(false) }
-        val isLoading = remember { mutableStateOf(true) }
-        val inputValue = remember { mutableStateOf("1080,60,1,15000,0,5000,0,0,0") }  // ✅ CRITICAL CHANGE 6: Updated to 9 values
-        val predictionResult = remember { mutableStateOf<PredictionResult?>(null) }
-        val lastLearningStep = remember { mutableStateOf<LearningStep?>(null) }
-        val keyboardController = LocalSoftwareKeyboardController.current
-        val coroutineScope = rememberCoroutineScope()
-
-        // Asynchronously load the model when the app starts
-        LaunchedEffect(Unit) {
-            isLoading.value = true
-            modelLoaded.value = withContext(Dispatchers.IO) { loadModel() }
-            isLoading.value = false
-        }
+        val context = LocalContext.current
+        var serviceRunning by remember { mutableStateOf(false) }
+        val statusHistory by QoSOptimizer.statusHistory.collectAsState()
+        val hasUsageAccess = remember { mutableStateOf(hasUsageStatsPermission(context)) }
 
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             Column(
@@ -76,63 +50,47 @@ class MainActivity : ComponentActivity() {
                     .padding(innerPadding)
                     .padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Show a loading indicator, an error message, or the main UI
-                when {
-                    isLoading.value -> {
-                        CircularProgressIndicator()
-                        Text("Loading Model...", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 16.dp))
+                Text(
+                    text = "VULCAN Real-Time Optimizer",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
+                )
+
+                if (!hasUsageAccess.value) {
+                    PermissionCard {
+                        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                     }
-                    !modelLoaded.value -> {
-                        Text("Error: Model could not be loaded.", color = Color.Red)
-                    }
-                    else -> {
-                        // Main UI content
-                        Column(
+                }
+
+                if (statusHistory.isNotEmpty()) {
+                    LiveStatusCard(status = statusHistory[0])
+                    HistoricActivityCard(status = statusHistory.getOrNull(1))
+                    LiveBandwidthChart(history = statusHistory)
+                    HistoricActivitiesTimeline(history = statusHistory)
+                }
+
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Monitoring Service Control", fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterHorizontally))
+                        Spacer(Modifier.height(8.dp))
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                            horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            Text(
-                                text = "Real-Time Traffic Classification",
-                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)
-                            )
-
-                            // Display prediction results
-                            ResultCards(predictionResult.value)
-
-                            // Display the on-device learning simulation card if a prediction has been made
-                            predictionResult.value?.let {
-                                OnDeviceLearningCard(it) { learningStep ->
-                                    lastLearningStep.value = learningStep
-                                }
+                            Button(onClick = {
+                                context.startService(Intent(context, EnhancedOptimizationService::class.java))
+                                serviceRunning = true
+                            }, enabled = !serviceRunning && hasUsageAccess.value) {
+                                Text("Start Service")
                             }
-                            
-                            // Display feedback from the last learning step
-                            lastLearningStep.value?.let {
-                                Text(
-                                    "Last Learning Step: ${it.feedback} (Reward: ${it.reward})",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
+                            Button(onClick = {
+                                context.stopService(Intent(context, EnhancedOptimizationService::class.java))
+                                QoSOptimizer.resetState()
+                                serviceRunning = false
+                            }, enabled = serviceRunning) {
+                                Text("Stop Service")
                             }
-
-                            // Text field for user input
-                            TextField(
-                                value = inputValue.value,
-                                onValueChange = { inputValue.value = it },
-                                label = { Text("Enter 9 comma-separated features") },  // ✅ CRITICAL CHANGE 4: Changed from 7 to 9
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = {
-                                    keyboardController?.hide()
-                                    coroutineScope.launch {
-                                        predictionResult.value = runInference(inputValue.value)
-                                        lastLearningStep.value = null // Reset learning step on new inference
-                                    }
-                                })
-                            )
                         }
                     }
                 }
@@ -141,121 +99,170 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun OnDeviceLearningCard(result: PredictionResult, onLearningStep: (LearningStep) -> Unit) {
-        Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(2.dp)) {
+    fun LiveStatusCard(status: LiveStatus) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(4.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            StatusItem(status = status, title = "Live Status")
+        }
+    }
+
+    @Composable
+    fun HistoricActivityCard(status: LiveStatus?) {
+        status?.let {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(2.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                StatusItem(status = it, title = "Previous Activity")
+            }
+        }
+    }
+
+    @Composable
+    fun StatusItem(status: LiveStatus, title: String) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Action Taken:", fontWeight = FontWeight.SemiBold)
+                Text(status.action)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Detected Traffic Type:", fontWeight = FontWeight.SemiBold)
+                val label = status.prediction?.label ?: "N/A"
+                val color = when (label) {
+                    "REEL" -> Color(0xFFD32F2F)
+                    "NON-REEL" -> Color(0xFF388E3C)
+                    else -> LocalContentColor.current
+                }
+                Text(label, color = color, fontWeight = FontWeight.Bold)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Model Confidence:", fontWeight = FontWeight.SemiBold)
+                status.prediction?.let {
+                    LinearProgressIndicator(
+                        progress = { it.confidence },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        color = if (it.label == "REEL") Color(0xFFD32F2F) else Color(0xFF388E3C)
+                    )
+                    Text("${"%.1f".format(it.confidence * 100)}%")
+                } ?: Text("N/A")
+            }
+        }
+    }
+
+    @Composable
+    fun LiveBandwidthChart(history: List<LiveStatus>) {
+        val bandwidthData = history.map { it.bandwidthBps / 1024f }.reversed()
+        val chartColor = MaterialTheme.colorScheme.primary
+
+        Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("On-Device Learning Simulation", fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Simulate user experience to generate a reward for on-device adaptation.", style = MaterialTheme.typography.bodySmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = {
-                    // Simulate user experience (e.g., video stalling)
-                    val didStall = Random.nextBoolean()
-                    
-                    // Calculate reward based on the prediction and the simulated experience
-                    val reward = if (result.label == "REEL") {
-                        if (didStall) -1.0 else 1.0 // Punish for stalling, reward for smoothness
-                    } else {
-                        0.0 // Neutral reward for non-reel traffic
+                Text("Live Bandwidth (KB/s)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Spacer(Modifier.height(8.dp))
+                Canvas(modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)) {
+                    if (bandwidthData.size > 1) {
+                        val maxBw = bandwidthData.maxOrNull()?.coerceAtLeast(1f) ?: 1f
+                        val path = Path()
+                        path.moveTo(0f, size.height - (bandwidthData[0] / maxBw) * size.height)
+                        for (i in 1 until bandwidthData.size) {
+                            val x = (i.toFloat() / (bandwidthData.size - 1)) * size.width
+                            val y = size.height - (bandwidthData[i] / maxBw) * size.height
+                            path.lineTo(x, y)
+                        }
+                        drawPath(path, color = chartColor, style = Stroke(width = 3.dp.toPx()))
                     }
-                    
-                    val feedback = if (didStall) "Video Stalled" else "Playback Smooth"
-                    onLearningStep(LearningStep(result.label, reward, feedback))
-                    
-                    // In a full implementation, this is where you would trigger
-                    // an on-device training step using the collected reward.
-                }) {
-                    Text("Simulate User Experience")
                 }
             }
         }
     }
 
     @Composable
-    fun ResultCards(result: PredictionResult?) {
-        val reelConfidence = if (result?.label == "REEL") result.confidence * 100 else 100 - ((result?.confidence ?: 1f) * 100)
-        val nonReelConfidence = 100 - reelConfidence
-
-        Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-            Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("REEL Confidence", fontWeight = FontWeight.SemiBold)
-                Text("${"%.1f".format(reelConfidence)}%", fontWeight = FontWeight.Bold)
+    fun HistoricActivitiesTimeline(history: List<LiveStatus>) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Activity Timeline (Most Recent First)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    val timelineItems = (history + List(10) { null }).take(10)
+                    timelineItems.forEach { status ->
+                        val color = when (status?.prediction?.label) {
+                            "REEL" -> Color(0xFFD32F2F)
+                            "NON-REEL" -> Color(0xFF388E3C)
+                            else -> Color.Gray.copy(alpha = 0.3f)
+                        }
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(20.dp),
+                            color = color,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {}
+                    }
+                }
             }
         }
-        Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-            Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("NON-REEL Confidence", fontWeight = FontWeight.SemiBold)
-                Text("${"%.1f".format(nonReelConfidence)}%", fontWeight = FontWeight.Bold)
+    }
+
+    @Composable
+    fun PermissionCard(onRequestPermission: () -> Unit) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Permission Required", fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text("To identify apps using the network, this app needs 'Usage Access' permission.", textAlign = TextAlign.Center)
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onRequestPermission, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Text("Grant Permission")
+                }
             }
         }
     }
 
-    // ✅ CRITICAL CHANGE 3: Complete loadModel() function rewrite for FlexDelegate
-    private fun loadModel(): Boolean {
-        return try {
-            val modelBuffer = loadModelFile(MODEL_FILE)
-            
-            // Initialize FlexDelegate for GRU support
-            flexDelegate = FlexDelegate()
-            val options = Interpreter.Options().apply {
-                addDelegate(flexDelegate!!)
-            }
-            
-            actorInterpreter = Interpreter(modelBuffer, options)
-            Log.d(TAG, "Model loaded successfully.")
-            true
-        } catch (e: IOException) {
-            Log.e(TAG, "Error loading model: ${e.message}")
-            false
+    private fun hasUsageStatsPermission(context: Context): Boolean {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
         }
-    }
-
-    private fun runInference(inputString: String): PredictionResult? {
-        if (actorInterpreter == null) return null
-        
-        // Parse the input string into a float array
-        val features = inputString.split(",").mapNotNull { it.trim().toFloatOrNull() }
-        if (features.size != 9) {  // ✅ CRITICAL CHANGE 4: Changed from 7 to 9
-            Log.e(TAG, "Invalid input: Expected 9 features, got ${features.size}")  // ✅ CRITICAL CHANGE 4: Updated error message
-            return null // Handle invalid input gracefully
-        }
-
-        // Prepare input and output buffers for the TFLite model
-        val inputArray = arrayOf(arrayOf(features.toFloatArray()))
-        val outputArray = Array(1) { FloatArray(2) }
-
-        try {
-            actorInterpreter?.run(inputArray, outputArray)
-            val nonReelProb = outputArray[0][0]
-            val reelProb = outputArray[0][1]
-            
-            // Determine the label and confidence from the output probabilities
-            val label = if (reelProb > nonReelProb) "REEL" else "NON-REEL"
-            val confidence = if (label == "REEL") reelProb else nonReelProb
-            
-            return PredictionResult(label, confidence)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during inference: ${e.message}")
-            return null
-        }
-    }
-
-    @Throws(IOException::class)
-    private fun loadModelFile(modelName: String): MappedByteBuffer {
-        val fileDescriptor = assets.openFd(modelName)
-        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
-        val fileChannel = inputStream.channel
-        val startOffset = fileDescriptor.startOffset
-        val declaredLength = fileDescriptor.declaredLength
-        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
-    }
-
-    // ✅ CRITICAL CHANGE 5: Updated onDestroy() to close FlexDelegate
-    override fun onDestroy() {
-        super.onDestroy()
-        // Close the interpreter to free up resources
-        actorInterpreter?.close()
-        flexDelegate?.close()  // Added FlexDelegate cleanup
+        return mode == AppOpsManager.MODE_ALLOWED
     }
 }
-
