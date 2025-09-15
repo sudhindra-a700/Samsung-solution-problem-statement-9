@@ -18,7 +18,7 @@ def feature_engineering_step(hf_dataset_name='VULCAN/sns-reel-traffic-dataset'):
     Loads the training data from the specified Hugging Face Hub repository.
     """
     logger.info(f"Step 1: Loading dataset '{hf_dataset_name}' from Hugging Face Hub...")
-    
+
     try:
         # Load the specific CSV file from the repository
         dataset = load_dataset(hf_dataset_name, data_files="massive_balanced_training.csv")
@@ -35,7 +35,7 @@ def feature_engineering_step(hf_dataset_name='VULCAN/sns-reel-traffic-dataset'):
     # Normalize the features to a range of [0, 1]
     scaler = MinMaxScaler()
     X_scaled = scaler.fit_transform(X)
-    
+
     logger.info("Step 1: Feature Engineering complete.")
     return X_scaled, y
 
@@ -55,13 +55,13 @@ def validate_exported_model(model_path="sac_actor_model.tflite"):
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
-        
+
         # Create a dummy input tensor that matches the model's expected input shape
         dummy_input = np.random.rand(1, 1, 7).astype(np.float32)
         interpreter.set_tensor(input_details[0]['index'], dummy_input)
         interpreter.invoke()
         output_data = interpreter.get_tensor(output_details[0]['index'])
-        
+
         logger.info(f"Validation successful. Model produced an output: {output_data}")
         return True
 
