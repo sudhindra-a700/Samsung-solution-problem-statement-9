@@ -17,7 +17,6 @@ class EnhancedOptimizationService : Service() {
     companion object {
         private const val TAG = "EnhancedOptService"
         private const val MODEL_FILE = "sac_actor_model.tflite"
-        // ✅ Updated monitoring interval to 10 seconds
         private const val MONITORING_INTERVAL_MS = 10000L
     }
 
@@ -43,15 +42,14 @@ class EnhancedOptimizationService : Service() {
         serviceScope.launch {
             Log.i(TAG, "Starting real-time traffic monitoring...")
             while (isActive) {
-                val (bpsRx, _, activeApp) = trafficMonitor.sampleTraffic()
+                val (bpsRx, bpsTx, activeApp) = trafficMonitor.sampleTraffic()
                 val isSocialApp = activeApp.contains("youtube") || activeApp.contains("instagram")
 
-                // ✅ Only process traffic if it's a known social media app.
                 if (isSocialApp) {
                     val features = createFeaturesFromRealData(bpsRx)
                     val result = runInference(features)
                     result?.let {
-                        QoSOptimizer.applyOptimizationPolicy(it, activeApp, bpsRx)
+                        QoSOptimizer.applyOptimizationPolicy(it, activeApp, bpsRx, bpsTx)
                     }
                 }
 
@@ -61,8 +59,7 @@ class EnhancedOptimizationService : Service() {
     }
 
     private fun createFeaturesFromRealData(bpsRx: Float): FloatArray {
-        // This logic is now simpler because we already know it's a social app.
-        val REEL_BANDWIDTH_THRESHOLD = 50 * 1024 // 50 KB/s
+        val REEL_BANDWIDTH_THRESHOLD = getReelBandwidthThreshold()
         if (bpsRx > REEL_BANDWIDTH_THRESHOLD) {
             Log.d(TAG, "Sufficient bandwidth for social app. Generating REEL features.")
             return floatArrayOf(0.25f, 0.8f, 0.9f, 0.0f, 1.0f, 0.0f, 0.9f)
@@ -89,7 +86,6 @@ class EnhancedOptimizationService : Service() {
         }
     }
 
-    // ... (rest of the service is unchanged) ...
     private fun loadModel(): Boolean {
         return try {
             val modelBuffer = loadModelFile()
@@ -110,6 +106,14 @@ class EnhancedOptimizationService : Service() {
         val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
         val fileChannel = inputStream.channel
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.startOffset, fileDescriptor.declaredLength)
+    }
+
+    private fun getReelBandwidthThreshold(): Float {
+        return when (QoSOptimizer.currentProfile) {
+            OptimizationProfile.DATA_SAVER -> 25 * 1024 // 25 KB/s
+            OptimizationProfile.BALANCED -> 50 * 1024 // 50 KB/s
+            OptimizationProfile.HIGH_PERFORMANCE -> 75 * 1024 // 75 KB/s
+        }
     }
 
     override fun onDestroy() {
