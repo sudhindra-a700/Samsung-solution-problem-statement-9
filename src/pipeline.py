@@ -11,7 +11,7 @@ from export_model_to_tflite import main as run_training_and_export
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def feature_engineering_step(hf_dataset_name='VULCAN/sns-app-traffic-dataset'):
+def feature_engineering_step(hf_dataset_name='VULCAN/sns-app-traffic-datasets'):
     """
     Loads and preprocesses the training data from Hugging Face Hub.
     """
