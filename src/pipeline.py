@@ -6,43 +6,48 @@ import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from datasets import load_dataset
 
-# Import the main function from your existing export script
 from export_model_to_tflite import main as run_training_and_export
 
-# --- Setup logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def feature_engineering_step(hf_dataset_name='VULCAN/sns-reel-traffic-dataset'):
     """
-    Loads the training data from the specified Hugging Face Hub repository.
+    Loads and preprocesses the training data from Hugging Face Hub.
     """
-    logger.info(f"Step 1: Loading dataset '{hf_dataset_name}' from Hugging Face Hub...")
+    logger.info(f"Step 1: Loading and processing dataset '{hf_dataset_name}' from Hugging Face Hub...")
 
     try:
-        # Load the specific CSV file from the repository
         dataset = load_dataset(hf_dataset_name, data_files="massive_balanced_training.csv")
-        df = dataset['train'].to_pandas() # Convert to a pandas DataFrame
+        df = dataset['train'].to_pandas()
     except Exception as e:
         logger.error(f"Failed to load dataset from Hugging Face Hub: {e}")
         return None, None
 
-    # Select the relevant features for the model
+    # Add new labels for more granular classification
+    df['granular_label'] = df['label'].apply(lambda x: 'REEL' if x == 1 else 'NON-REEL')
+    live_stream_mask = (df['fps'] > 50) & (df['bh'] > 10000)
+    video_call_mask = (df['stalling'] > 10) & (df['qc'] > 5)
+    
+    df.loc[live_stream_mask, 'granular_label'] = 'LIVE-STREAM'
+    df.loc[video_call_mask, 'granular_label'] = 'VIDEO-CALL'
+
     features_cols = ['fmt', 'fps', 'bh', 'droppedFrames', 'playedFrames', 'stalling', 'qc']
     X = df[features_cols].values
-    y = df['label'].values
-
-    # Normalize the features to a range of [0, 1]
+    
+    # Encode the new granular labels
+    labels_map = {label: i for i, label in enumerate(df['granular_label'].unique())}
+    y = df['granular_label'].map(labels_map).values
+    
     scaler = MinMaxScaler()
     X_scaled = scaler.fit_transform(X)
 
-    logger.info("Step 1: Feature Engineering complete.")
+    logger.info(f"Step 1: Feature Engineering complete with new labels: {labels_map}")
     return X_scaled, y
-
 
 def validate_exported_model(model_path="sac_actor_model.tflite"):
     """
-    Loads the exported TFLite model and runs a test inference to validate it.
+    Validates the exported TFLite model.
     """
     logger.info(f"Step 3: Validating the exported model: {model_path}")
 
@@ -56,7 +61,6 @@ def validate_exported_model(model_path="sac_actor_model.tflite"):
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
 
-        # Create a dummy input tensor that matches the model's expected input shape
         dummy_input = np.random.rand(1, 1, 7).astype(np.float32)
         interpreter.set_tensor(input_details[0]['index'], dummy_input)
         interpreter.invoke()
@@ -71,22 +75,19 @@ def validate_exported_model(model_path="sac_actor_model.tflite"):
 
 def main_pipeline():
     """
-    The main pipeline that orchestrates the entire workflow.
+    Main pipeline for training and deployment.
     """
     logger.info("--- Starting the Main Training and Deployment Pipeline ---")
 
-    # --- Step 1: Feature Engineering from Hugging Face ---
     features, labels = feature_engineering_step(hf_dataset_name='VULCAN/sns-reel-traffic-dataset')
     if features is None:
         logger.error("Pipeline stopped due to error in feature engineering.")
         return
 
-    # --- Step 2: Run the Training and Export Process ---
     logger.info("Step 2: Kicking off training and model export...")
     run_training_and_export(features, labels)
     logger.info("Step 2: Training and model export completed.")
 
-    # --- Step 3: Validate the Exported Model ---
     validation_passed = validate_exported_model()
 
     if validation_passed:
