@@ -12,9 +12,8 @@ import java.util.concurrent.TimeUnit
 object QoSOptimizer {
     private const val TAG = "QoSOptimizer"
     private const val WAKE_LOCK_TAG = "VULCAN::PerformanceWakeLock"
-    private const val HISTORY_SIZE = 10 // Store the last 10 events for visualization
+    private const val HISTORY_SIZE = 10
 
-    // This StateFlow now holds a list of the last 10 status updates.
     private val _statusHistory = MutableStateFlow<List<LiveStatus>>(listOf(LiveStatus("Monitoring", null)))
     val statusHistory = _statusHistory.asStateFlow()
 
@@ -22,24 +21,23 @@ object QoSOptimizer {
     private var workManager: WorkManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
+    var currentProfile = OptimizationProfile.BALANCED
+
     fun initialize(context: Context) {
         powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         workManager = WorkManager.getInstance(context)
     }
 
-    fun applyOptimizationPolicy(prediction: PredictionResult, appName: String = "", bandwidthBps: Float) {
-        val actionText = when (prediction.label) {
-            "REEL" -> handleReelTraffic(prediction.confidence, appName)
-            "NON-REEL" -> handleNonReelTraffic(appName)
+    fun applyOptimizationPolicy(prediction: PredictionResult, appName: String = "", bandwidthBps: Float, uploadBps: Float) {
+        val actionText = when {
+            uploadBps > getUploadThreshold() -> handleUploadTraffic(appName)
+            prediction.label == "REEL" -> handleReelTraffic(prediction.confidence, appName)
+            prediction.label == "NON-REEL" -> handleNonReelTraffic(appName)
             else -> applyDefaultPolicy()
         }
 
-        // Create a new status event with all the necessary data.
-        val newStatus = LiveStatus(actionText, prediction, bandwidthBps)
-
-        // Add the new status to the front of the list and keep only the last `HISTORY_SIZE` items.
+        val newStatus = LiveStatus(actionText, prediction, bandwidthBps, uploadBps)
         _statusHistory.value = (listOf(newStatus) + _statusHistory.value).take(HISTORY_SIZE)
-
         Log.i(TAG, "Final Action Taken: $actionText")
     }
 
@@ -50,7 +48,7 @@ object QoSOptimizer {
     }
 
     private fun handleReelTraffic(confidence: Float, appName: String): String {
-        return if (confidence > 0.85f) {
+        return if (confidence > 0.85f && currentProfile == OptimizationProfile.HIGH_PERFORMANCE) {
             boostCpuPerformance()
             "Performance Boosted for $appName"
         } else {
@@ -61,8 +59,15 @@ object QoSOptimizer {
 
     private fun handleNonReelTraffic(appName: String): String {
         resetCpuPerformance()
-        deferNonCriticalBackgroundTasks()
+        if (currentProfile == OptimizationProfile.DATA_SAVER) {
+            deferNonCriticalBackgroundTasks()
+        }
         return "Power Saving Mode for $appName"
+    }
+
+    private fun handleUploadTraffic(appName: String): String {
+        boostCpuPerformance()
+        return "Upload Boost for $appName"
     }
 
     private fun applyDefaultPolicy(): String {
@@ -70,7 +75,6 @@ object QoSOptimizer {
         return "Applying Balanced Policy"
     }
 
-    // ... (rest of the optimization functions are unchanged)
     private fun boostCpuPerformance() {
         if (wakeLock?.isHeld == false || wakeLock == null) {
             wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)?.apply { acquire(10 * 60 * 1000L) }
@@ -89,6 +93,14 @@ object QoSOptimizer {
             wakeLock?.release()
             wakeLock = null
             Log.i(TAG, "REAL ACTION: Released CPU WakeLock.")
+        }
+    }
+
+    private fun getUploadThreshold(): Float {
+        return when (currentProfile) {
+            OptimizationProfile.DATA_SAVER -> 150 * 1024 // 150 KB/s
+            OptimizationProfile.BALANCED -> 100 * 1024 // 100 KB/s
+            OptimizationProfile.HIGH_PERFORMANCE -> 50 * 1024 // 50 KB/s
         }
     }
 }
