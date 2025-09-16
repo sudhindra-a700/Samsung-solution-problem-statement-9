@@ -9,10 +9,12 @@ class TrafficMonitor(context: Context) {
 
     private val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     private var lastBytesRx: Long = 0
+    private var lastBytesTx: Long = 0
     private var lastTimestamp: Long = 0
 
     init {
         lastBytesRx = TrafficStats.getTotalRxBytes()
+        lastBytesTx = TrafficStats.getTotalTxBytes()
         lastTimestamp = System.currentTimeMillis()
     }
 
@@ -25,16 +27,22 @@ class TrafficMonitor(context: Context) {
         }
 
         val currentBytesRx = TrafficStats.getTotalRxBytes()
+        val currentBytesTx = TrafficStats.getTotalTxBytes()
+
         val bytesRx = currentBytesRx - lastBytesRx
+        val bytesTx = currentBytesTx - lastBytesTx
+
         val bpsRx = bytesRx / elapsedSeconds
+        val bpsTx = bytesTx / elapsedSeconds
 
         lastBytesRx = currentBytesRx
+        lastBytesTx = currentBytesTx
         lastTimestamp = currentTimestamp
 
         val foregroundApp = getForegroundApp()
 
-        Log.d("TrafficMonitor", "BPS Rx: ${"%.2f".format(bpsRx / 1024f)} KB/s, Active App: $foregroundApp")
-        return Triple(bpsRx, 0f, foregroundApp)
+        Log.d("TrafficMonitor", "BPS Rx: ${"%.2f".format(bpsRx / 1024f)} KB/s, BPS Tx: ${"%.2f".format(bpsTx / 1024f)} KB/s, Active App: $foregroundApp")
+        return Triple(bpsRx, bpsTx, foregroundApp)
     }
 
     private fun getForegroundApp(): String {
